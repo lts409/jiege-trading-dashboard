@@ -139,14 +139,18 @@ def calc_ai_sentiment() -> dict:
     }
 
 # ── 候选池 ──
-CANDIDATE_PATH = os.path.join(os.path.dirname(__file__), "..", "用户", "选股", "候选池.json")
+CANDIDATE_PATH = os.path.join(os.path.dirname(__file__), "candidates.json")
+# 也尝试加载外部候选池
+EXTERNAL_CANDIDATE_PATH = os.path.join(os.path.dirname(__file__), "..", "用户", "选股", "候选池.json")
 def load_candidates() -> dict:
-    """加载候选池"""
-    try:
-        with open(CANDIDATE_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        return {"错误": str(e)}
+    """加载候选池（优先外部文件，回退本地示例）"""
+    for path in [EXTERNAL_CANDIDATE_PATH, CANDIDATE_PATH]:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            continue
+    return {"赛道列表": [], "说明": "请创建 candidates.json 配置候选池"}
 
 # ── Flask应用 ──
 app = Flask(__name__)
