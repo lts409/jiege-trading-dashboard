@@ -82,8 +82,9 @@ AI_ECOSYSTEM = {
 
 def calc_ai_sentiment() -> dict:
     """计算AI产业链情绪指数"""
-    all_codes = list(set(sum(AI_ECOSYSTEM.values(), [])))
-    quotes = tencent_quote(all_codes)
+    # AI_ECOSYSTEM代码带sh/sz前缀,需要先去前缀再查询
+    all_bare = list(set(c[2:] for c in sum(AI_ECOSYSTEM.values(), [])))
+    quotes = tencent_quote(all_bare)
     if "_error" in quotes:
         return {"error": quotes["_error"]}
     
@@ -94,7 +95,9 @@ def calc_ai_sentiment() -> dict:
         up = 0
         details = []
         for code in codes:
-            q = quotes.get(code, {})
+            # 去掉前缀（sh/sz）匹配纯数字key
+            bare_code = code[2:] if len(code) > 6 else code
+            q = quotes.get(bare_code, {})
             if q:
                 change_pct = q.get("change_pct", 0)
                 up += 1 if change_pct > 0 else 0
