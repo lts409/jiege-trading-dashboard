@@ -74,6 +74,8 @@
     <div class="meta">
       <span class="time" id="clk"></span>
       <span class="rs" id="rs"></span>
+      <button id="tts-btn" onclick="ttsToggle()" style="background:#21262d;border:1px solid #30363d;color:#8b949e;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:12px;">🔇 TTS关</button>
+      <button onclick="ttsSpeakStatus()" style="background:#21262d;border:1px solid #30363d;color:#8b949e;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:12px;">🔊 播报</button>
     </div>
   </div>
 
@@ -134,6 +136,7 @@
 <script>
 const RS = 60;
 let clock;
+const TTS = { enabled: false, lastAI: null, lastPrice: {} };
 function pad(n){return n<10?'0'+n:n}
 
 function fmt(v,d=2){return v===0?'0.00':v?Number(v).toFixed(d):'--'}
@@ -174,6 +177,7 @@ async function loadAISentiment(){
   document.getElementById('ai-sent-label').textContent=d.label;
   document.getElementById('ai-sent-label').style.color=d.color;
   document.getElementById('ai-sent-advice').textContent=d.advice+' | '+d.up+'/'+d.total+'涨 | '+d.time;
+  ttsCheckAI(d);
   
   const secEl=document.getElementById('ai-sectors');
   secEl.innerHTML=Object.entries(d.sectors).map(([name,sec])=>{
@@ -268,6 +272,65 @@ async function loadKeyLevels(){
       <td class="${resPct>0?'down':'up'}">${resPct==='--'?'--':arrow(parseFloat(resPct))+' '+resPct+'%'}</td>
     </tr>`;
   }
+}
+
+// ── TTS 语音播报 ──
+function ttsSpeak(text, priority=false) {
+  if(!TTS.enabled && !priority) return;
+  if(!window.speechSynthesis) { console.log('TTS不支持'); return; }
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'zh-CN';
+  u.rate = 0.85;
+  if(window.speechSynthesis.getVoices().length===0) {
+    window.speechSynthesis.onvoiceschanged = () => {
+      const v = window.speechSynthesis.getVoices().find(v=>v.lang.startsWith('zh'));
+      if(v) u.voice = v;
+    };
+  } else {
+    const v = window.speechSynthesis.getVoices().find(v=>v.lang.startsWith('zh'));
+    if(v) u.voice = v;
+  }
+  window.speechSynthesis.speak(u);
+}
+
+function ttsToggle(){
+  TTS.enabled = !TTS.enabled;
+  document.getElementById('tts-btn').textContent = TTS.enabled ? '🔊 TTS开' : '🔇 TTS关';
+  document.getElementById('tts-btn').style.color = TTS.enabled ? '#00ff88' : '#8b949e';
+  if(TTS.enabled) ttsSpeak('语音播报已开启', true);
+}
+
+function ttsSpeakStatus(){
+  const aiVal = document.getElementById('ai-sent-val').textContent;
+  const aiLabel = document.getElementById('ai-sent-label').textContent;
+  const rs = document.getElementById('rs').textContent;
+  let text = `AI产业链情绪指数 ${aiVal}，${aiLabel}。`;
+  const rows = document.querySelectorAll('#pos-tbody tr');
+  if(rows.length > 0) {
+    const stocks = [];
+    rows.forEach(row => {
+      const tds = row.querySelectorAll('td');
+      stocks.push(`${tds[1]?.textContent||''} ${tds[4]?.textContent||''}，收益${tds[6]?.textContent||''}`);
+    });
+    text += `持仓概况：${stocks.join('，')}`;
+  }
+  ttsSpeak(text, true);
+}
+
+function ttsCheckAI(d) {
+  if(!TTS.enabled) return;
+  const key = d.ratio + d.label;
+  if(key === TTS.lastAI) return;
+  TTS.lastAI = key;
+  const weak = Object.entries(d.sectors)
+    .filter(([_,s]) => s.ratio <= 50)
+    .map(([n,_]) => n).slice(0,3);
+  let text = `AI情绪更新：${d.ratio}%，${d.label}`;
+  if(weak.length > 0) text += `。弱势板块：${weak.join('、')}`;
+  if(d.ratio >= 80) text += '。市场强势，持股不动。';
+  else if(d.ratio < 20) text += '。市场冰点，注意风险。';
+  ttsSpeak(text);
 }
 
 // 全量刷新
