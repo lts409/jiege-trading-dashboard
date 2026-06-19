@@ -6,7 +6,7 @@
 
 import json, os, requests, subprocess
 from datetime import datetime
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request, send_file
 
 try:
     from mootdx.quotes import Quotes
@@ -334,6 +334,42 @@ def api_key_levels():
 @app.route("/api/sentiment")
 def api_sentiment():
     return jsonify({"up": 1800, "label": "🌥️ 平衡", "note": "880005暂用模拟值"})
+
+@app.route("/api/tts")
+def api_tts():
+    """TTS语音合成 - 开车时用手机浏览器访问"""
+    text = request.args.get("text", "")
+    if not text:
+        # 默认播报当前状态
+        try:
+            quotes = get_quotes([p["code"] for p in POSITIONS])
+            lines = []
+            for p in POSITIONS:
+                q = quotes.get(p["code"], {})
+                name = q.get("name", p["name"])
+                price = q.get("price", 0)
+                cost = p["cost"]
+                gain = round((price - cost) / cost * 100, 1) if cost and price else 0
+                gs = "盈利" if gain > 0 else "亏损" if gain < 0 else "持平"
+                lines.append(f"{name}，现价{price}，{gs}{abs(gain)}%")
+            text = "您的持仓概况：" + "，".join(lines)
+            # 加AI情绪
+            sent = calc_ai_sentiment()
+            text += f"。AI产业链情绪指数{sent['ratio']}%，{sent['advice']}"
+        except:
+            text = "数据获取失败，请稍后再试"
+    
+    # 生成语音文件
+    tts_path = f"/tmp/tts/tts_{datetime.now().strftime('%H%M%S')}.aiff"
+    os.makedirs("/tmp/tts", exist_ok=True)
+    try:
+        subprocess.run(["say", "-v", "Tingting", text, "-o", tts_path],
+                      check=True, timeout=30, capture_output=True)
+        return send_file(tts_path, mimetype="audio/aiff",
+                        as_attachment=False,
+                        download_name=f"tts_{datetime.now().strftime('%H%M%S')}.aiff")
+    except Exception as e:
+        return jsonify({"error": str(e), "text": text})
 
 @app.route("/api/stages")
 def api_stages():
