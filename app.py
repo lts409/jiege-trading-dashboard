@@ -193,42 +193,71 @@ def api_positions():
 
 @app.route("/api/indices")
 def api_indices():
-    """获取大盘指数"""
-    codes = [idx["code"] for idx in CONFIG["indices"]]
-    quotes = tencent_quote(codes)
-    result = []
-    for idx in CONFIG["indices"]:
-        q = quotes.get(idx["code"], {})
-        result.append({
-            "name": idx["name"],
-            "code": idx["code"],
-            "price": q.get("price", 0),
-            "change_pct": q.get("change_pct", 0),
-            "high": q.get("high", 0),
-            "low": q.get("low", 0),
-            "amount_wan": q.get("amount_wan", 0),
-        })
-    return jsonify(result)
+    """获取大盘指数（使用正确的前缀）"""
+    # 指数代码前缀规则 vs 股票不同
+    INDEX_PREFIX = {
+        "000001": "sh",  # 上证指数
+        "000688": "sh",  # 科创50
+        "399001": "sz",  # 深证成指
+        "399006": "sz",  # 创业板指
+    }
+    prefixed = [f"{INDEX_PREFIX.get(idx['code'], 'sh')}{idx['code']}" for idx in CONFIG["indices"]]
+    url = "https://qt.gtimg.cn/q=" + ",".join(prefixed)
+    try:
+        r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        r.encoding = "gbk"
+        result = []
+        for line in r.text.strip().split(";"):
+            if not line.strip() or "=" not in line or '"' not in line:
+                continue
+            vals = line.split('"')[1].split("~")
+            if len(vals) < 35:
+                continue
+            code = vals[2]
+            result.append({
+                "name": vals[1],
+                "code": code,
+                "price": float(vals[3]) if vals[3] else 0,
+                "change_pct": float(vals[32]) if vals[32] else 0,
+                "high": float(vals[33]) if vals[33] else 0,
+                "low": float(vals[34]) if vals[34] else 0,
+                "amount_wan": float(vals[37]) if vals[37] else 0,
+            })
+        # 按配置顺序排序
+        code_order = [idx["code"] for idx in CONFIG["indices"]]
+        result.sort(key=lambda x: code_order.index(x["code"]) if x["code"] in code_order else 99)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 @app.route("/api/sectors")
 def api_sectors():
-    """获取板块行情（使用板块指数代码）"""
-    codes = [s["code"] for s in CONFIG["sectors"]]
-    # 板块指数需要 BK 前缀
-    bk_codes = ["sh" + c if c.startswith("BK") else c for c in codes]
-    # 腾讯API用 sh/BK... 格式
-    url_codes = []
-    for s in CONFIG["sectors"]:
-        c = s["code"]
-        url_codes.append(f"sh{c}" if c.startswith("BK") else c)
-    
-    result = {}
-    for i, s in enumerate(CONFIG["sectors"]):
-        r = requests.get(f"https://qt.gtimg.cn/q=s_sh{s['code']}", 
-                        headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
-        r.encoding = "gbk"
-        result[s["name"]] = {"status": "queried"}
-    return jsonify(result)
+    """获取板块行情（从持仓数据推导）"""
+    try:
+        codes = [p["code"] for p in POSITIONS]
+        quotes = tencent_quote(codes)
+        sector_groups = {
+            "MLCC": ["双星新材", "风华高科", "三环集团"],
+            "光通信": ["光迅科技"],
+            "半导体": [],
+            "AI芯片": [],
+            "PCB": [],
+        }
+        result = []
+        pos_data = {p["name"]: p for p in POSITIONS}
+        for sec_name, stocks in sector_groups.items():
+            changes = []
+            for s in stocks:
+                p = pos_data.get(s)
+                if p:
+                    q = quotes.get(p["code"], {})
+                    if q.get("price", 0) > 0:
+                        changes.append(q["change_pct"])
+            avg = round(sum(changes)/len(changes), 2) if changes else 0
+            result.append({"name": sec_name, "change_pct": avg, "count": len(changes)})
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 @app.route("/api/ai-sentiment")
 def api_ai_sentiment():
