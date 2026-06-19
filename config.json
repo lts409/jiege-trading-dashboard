@@ -1,0 +1,69 @@
+{
+  "portfolio": {
+    "name": "5倍主线计划 · 主账户",
+    "description": "双星5倍计划 · MLCC主线 · PCIE独立赛道 · AI全链路覆盖"
+  },
+
+  "positions": [
+    {"name": "双星新材", "code": "002585", "shares": 15500, "cost": 2.052, "avg_volume": 150000000},
+    {"name": "瑞玛精密", "code": "002976", "shares": 24000, "cost": 28.381, "avg_volume": 45000000},
+    {"name": "万通发展", "code": "600246", "shares": 10000, "cost": 17.771, "avg_volume": 320000000},
+    {"name": "光迅科技", "code": "002281", "shares": 300, "cost": 208.34, "avg_volume": 50000000},
+    {"name": "风华高科", "code": "000636", "shares": 800, "cost": 54.891, "avg_volume": 80000000},
+    {"name": "三环集团", "code": "300408", "shares": 500, "cost": 120.804, "avg_volume": 60000000}
+  ],
+
+  "watch_items": [
+    {"name": "双星新材", "code": "002585", "type": "stock"},
+    {"name": "瑞玛精密", "code": "002976", "type": "stock"},
+    {"name": "万通发展", "code": "600246", "type": "stock"},
+    {"name": "光迅科技", "code": "002281", "type": "stock"},
+    {"name": "风华高科", "code": "000636", "type": "stock"},
+    {"name": "三环集团", "code": "300408", "type": "stock"}
+  ],
+
+  "indices": [
+    {"name": "上证指数",   "code": "000001"},
+    {"name": "深证成指",   "code": "399001"},
+    {"name": "创业板指",   "code": "399006"},
+    {"name": "科创50",     "code": "000688"}
+  ],
+
+  "sectors": [
+    {"name": "MLCC板块",    "code": "BK0890"},
+    {"name": "半导体",      "code": "BK1035"},
+    {"name": "光通信",      "code": "BK0514"},
+    {"name": "AI芯片",      "code": "BK1200"},
+    {"name": "PCB概念",     "code": "BK0899"}
+  ],
+
+  "key_levels": {
+    "双星新材": {
+      "support": [13.10, 12.58, 11.50],
+      "resistance": [15.50, 18.00, 20.00]
+    },
+    "万通发展": {
+      "support": [18.87, 17.77, 16.50],
+      "resistance": [19.50, 22.00, 25.00]
+    },
+    "光迅科技": {
+      "support": [250, 230, 210],
+      "resistance": [270, 300, 350]
+    }
+  },
+
+  "stages": [
+    {"name": "暗流期",   "emoji": "🌊", "desc": "市场局部活跃，主流资金尚未形成共识"},
+    {"name": "萌芽期",   "emoji": "🌱", "desc": "出现明确主线，板块开始吸引眼球"},
+    {"name": "第一枪",   "emoji": "🔫", "desc": "龙头股率先涨停，打开空间"},
+    {"name": "催化共振", "emoji": "⚡", "desc": "多因素叠加，板块全面爆发"},
+    {"name": "一致认同", "emoji": "🚀", "desc": "全场看多，情绪达到高潮"},
+    {"name": "退潮期",   "emoji": "🌅", "desc": "高位分歧，获利盘涌出"}
+  ],
+
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8899,
+    "refresh_seconds": 60
+  }
+}

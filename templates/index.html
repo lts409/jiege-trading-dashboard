@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📊 杰哥交易仪表盘 v3.0</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#0d1117; color:#c9d1d9; font-family:-apple-system,'PingFang SC','Microsoft YaHei',monospace; padding:16px; }
+  .container { max-width:1600px; margin:0 auto; }
+
+  .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid #30363d; }
+  .header h1 { font-size:20px; color:#58a6ff; }
+  .header .meta { display:flex; gap:12px; align-items:center; }
+  .header .time { color:#8b949e; font-size:13px; }
+  .header .rs { font-size:12px; color:#484f58; }
+
+  .card { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:14px; margin-bottom:12px; }
+  .card-title { font-size:11px; color:#8b949e; text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
+  .card-body { display:flex; gap:20px; flex-wrap:wrap; align-items:center; }
+
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { text-align:left; padding:6px 4px; border-bottom:1px solid #21262d; color:#8b949e; font-weight:500; font-size:11px; }
+  td { padding:6px 4px; border-bottom:1px solid #21262d; }
+
+  .up { color:#f04452; }
+  .down { color:#238636; }
+  .zero { color:#8b949e; }
+
+  .grid { display:grid; }
+  .g5 { grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:8px; }
+  .g2 { grid-template-columns:1fr 1fr; gap:12px; }
+  .g3 { grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:8px; }
+
+  .idx-card { background:#0d1117; border:1px solid #21262d; border-radius:6px; padding:10px; text-align:center; }
+  .idx-name { font-size:11px; color:#8b949e; }
+  .idx-price { font-size:22px; font-weight:700; }
+  .idx-change { font-size:13px; }
+
+  .kline-chart { width:100%; height:120px; margin-top:8px; background:#0d1117; border-radius:4px; position:relative; overflow:hidden; }
+  .kline-bar { position:absolute; bottom:0; width:8px; border-radius:2px; }
+
+  .sentiment-panel { padding:16px 20px; text-align:center; flex:1; min-width:180px; border-radius:8px; }
+  .sentiment-val { font-size:48px; font-weight:800; }
+  .sentiment-label { font-size:16px; font-weight:600; margin:6px 0 2px; }
+  .sentiment-advice { font-size:14px; margin:4px 0; }
+
+  .stage-bar { display:flex; gap:4px; margin-top:8px; }
+  .stage-item { flex:1; text-align:center; padding:6px 2px; border-radius:4px; font-size:11px; transition:all .3s; }
+  .stage-item.active { transform:scale(1.05); font-weight:700; border:2px solid #ffd700; }
+
+  .candidate-group { margin-bottom:10px; }
+  .candidate-group-title { font-size:13px; font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:8px; }
+  .candidate-item { display:inline-block; background:#0d1117; border:1px solid #21262d; border-radius:4px; padding:4px 8px; margin:2px; font-size:12px; }
+  .candidate-item .code { color:#484f58; font-size:10px; }
+  .candidate-item .entry { color:#ffa500; }
+
+  .badge { display:inline-block; padding:2px 6px; border-radius:3px; font-size:10px; font-weight:600; }
+
+  @media(max-width:768px) {
+    .g2 { grid-template-columns:1fr; }
+    .g5 { grid-template-columns:repeat(2,1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <!-- 头部 -->
+  <div class="header">
+    <h1>📊 杰哥交易仪表盘 v3.0</h1>
+    <div class="meta">
+      <span class="time" id="clk"></span>
+      <span class="rs" id="rs"></span>
+    </div>
+  </div>
+
+  <!-- 大盘指数 -->
+  <div class="card">
+    <div class="card-title">📈 大盘指数</div>
+    <div class="grid g5" id="indices-row"></div>
+  </div>
+
+  <!-- 情绪面板：880005 + AI Sentiment -->
+  <div class="card">
+    <div class="card-title">🧠 双情绪监控</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;">
+      <div class="sentiment-panel" id="sent-880005" style="background:linear-gradient(135deg,#161b22,#1a1a3e);flex:1;min-width:200px;">
+        <div style="font-size:11px;color:#8b949e;margin-bottom:4px;">全市场情绪 (880005)</div>
+        <div class="sentiment-val" id="sent-val" style="font-size:36px;">--</div>
+        <div class="sentiment-label" id="sent-label">待更新</div>
+      </div>
+      <div class="sentiment-panel" id="sent-ai" style="background:linear-gradient(135deg,#161b22,#1a2e1a);flex:2;min-width:300px;">
+        <div style="font-size:11px;color:#8b949e;margin-bottom:4px;">AI产业链情绪 (AI Sentiment Index)</div>
+        <div class="sentiment-val" id="ai-sent-val" style="font-size:36px;">--</div>
+        <div class="sentiment-label" id="ai-sent-label">加载中...</div>
+        <div class="sentiment-advice" id="ai-sent-advice" style="font-size:13px;color:#8b949e;"></div>
+        <div id="ai-sectors" style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-top:8px;font-size:11px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 持仓 -->
+  <div class="card">
+    <div class="card-title">💼 持仓监控</div>
+    <table>
+      <thead><tr><th>代码</th><th>名称</th><th>持股</th><th>成本</th><th>现价</th><th>涨跌</th><th>收益%</th><th>收益额</th><th>换手</th><th>量比</th><th>PE</th><th>成交额</th></tr></thead>
+      <tbody id="pos-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- 候选池 -->
+  <div class="card">
+    <div class="card-title">🎯 候选池 <span style="font-weight:normal;font-size:10px;color:#484f58;">（来自候选池.json）</span></div>
+    <div id="candidate-pool"></div>
+  </div>
+
+  <!-- 关键价位 -->
+  <div class="card">
+    <div class="card-title">🎯 关键价位</div>
+    <table><thead><tr><th>标的</th><th>支撑位</th><th>压力位</th><th>当前距支撑</th><th>当前距压力</th></tr></thead>
+    <tbody id="kl-tbody"></tbody></table>
+  </div>
+
+  <!-- 板块行情 -->
+  <div class="card">
+    <div class="card-title">📊 板块行情</div>
+    <div id="sector-today" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+  </div>
+</div>
+
+<script>
+const RS = 60;
+let clock;
+function pad(n){return n<10?'0'+n:n}
+
+function fmt(v,d=2){return v===0?'0.00':v?Number(v).toFixed(d):'--'}
+function cls(v){return v>0?'up':v<0?'down':'zero'}
+function arrow(v){return v>0?'▲':v<0?'▼':''}
+
+function clockTick(){
+  const n=new Date();
+  document.getElementById('clk').textContent=n.toLocaleString('zh-CN');
+}
+clockTick();setInterval(clockTick,1000);
+
+async function fetchJSON(u){const r=await fetch(u);return r.json()}
+
+// 大盘指数
+async function loadIndices(){
+  const d=await fetchJSON('/api/indices');
+  const row=document.getElementById('indices-row');
+  row.innerHTML=d.map(i=>`
+    <div class="idx-card">
+      <div class="idx-name">${i.name}</div>
+      <div class="idx-price ${cls(i.change_pct)}">${fmt(i.price,2)}</div>
+      <div class="idx-change ${cls(i.change_pct)}">${arrow(i.change_pct)} ${fmt(i.change_pct,2)}%</div>
+    </div>
+  `).join('');
+}
+
+// AI Sentiment Index
+async function loadAISentiment(){
+  const d=await fetchJSON('/api/ai-sentiment');
+  if(d.error){
+    document.getElementById('ai-sent-val').textContent='❌';
+    document.getElementById('ai-sent-label').textContent='数据源错误';
+    return;
+  }
+  document.getElementById('ai-sent-val').textContent=d.ratio+'%';
+  document.getElementById('ai-sent-val').style.color=d.color;
+  document.getElementById('ai-sent-label').textContent=d.label;
+  document.getElementById('ai-sent-label').style.color=d.color;
+  document.getElementById('ai-sent-advice').textContent=d.advice+' | '+d.up+'/'+d.total+'涨 | '+d.time;
+  
+  const secEl=document.getElementById('ai-sectors');
+  secEl.innerHTML=Object.entries(d.sectors).map(([name,sec])=>{
+    const c=sec.ratio>=80?'#f04452':sec.ratio>=60?'#00ff88':sec.ratio>=40?'#ffa500':'#8b949e';
+    return `<span style="background:#0d1117;border:1px solid ${c};border-radius:4px;padding:2px 6px;font-size:11px;color:${c}">${name} ${sec.ratio}%</span>`;
+  }).join('');
+}
+
+// 880005（简化版，从历史数据模拟）
+async function loadSentiment(){
+  try{
+    const d=await fetchJSON('/api/sentiment');
+    if(d.error) throw 'err';
+    document.getElementById('sent-val').textContent=d.up;
+    document.getElementById('sent-val').style.color=d.up>2500?'#f04452':d.up>2000?'#ffa500':'#238636';
+    document.getElementById('sent-label').textContent=d.label||'已更新';
+  }catch(e){
+    // 无880005数据时用AI Sentiment代替显示
+  }
+}
+
+// 持仓
+async function loadPositions(){
+  const d=await fetchJSON('/api/positions');
+  const tb=document.getElementById('pos-tbody');
+  let totalGain=0;
+  tb.innerHTML=d.map(p=>{
+    const gCls=p.gain_pct>0?'up':'down';
+    totalGain+=p.gain_amt;
+    return `<tr>
+      <td>${p.code}</td>
+      <td><b>${p.name}</b></td>
+      <td>${(p.shares/10000).toFixed(2)}万股</td>
+      <td>¥${fmt(p.cost,3)}</td>
+      <td class="${cls(p.change_pct)}"><b>¥${fmt(p.price,2)}</b></td>
+      <td class="${cls(p.change_pct)}">${arrow(p.change_pct)}${fmt(p.change_pct,2)}%</td>
+      <td class="${gCls}"><b>${arrow(p.gain_pct)}${fmt(p.gain_pct,2)}%</b></td>
+      <td class="${gCls}">${p.gain_amt>0?'+':''}¥${fmt(p.gain_amt,0)}</td>
+      <td>${fmt(p.turnover,1)}%</td>
+      <td>${fmt(p.vol_ratio,2)}</td>
+      <td>${fmt(p.pe,1)}</td>
+      <td>${fmt(p.amount_wan/10000,1)}亿</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('rs').textContent=`总浮动: ${totalGain>0?'+':''}¥${fmt(totalGain,0)} | 刷新:${RS}s`;
+}
+
+// 候选池
+async function loadCandidates(){
+  const d=await fetchJSON('/api/candidates');
+  const pool=document.getElementById('candidate-pool');
+  const list=d['赛道列表']||[];
+  pool.innerHTML=list.map(track=>`
+    <div class="candidate-group">
+      <div class="candidate-group-title">${track['赛道']||'?'} <span style="font-size:11px;color:#8b949e;">${track['阶段']||''}</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;">
+        ${(track['候选标的']||[]).map(c=>`
+          <span class="candidate-item">${c.name||c.name}<span class="code"> ${c.code||''}</span> <span class="entry">${c.entry_zone||c.entry||''}</span></span>
+        `).join('')}
+        ${(track['已排除']||[]).length>0?`<span style="color:#484f58;font-size:11px;padding:4px;">已排除: ${track['已排除'].map(e=>e.name).join(',')}</span>`:''}
+      </div>
+    </div>
+  `).join('');
+}
+
+// 板块行情
+async function loadSectors(){
+  const d=await fetchJSON('/api/sectors');
+  const el=document.getElementById('sector-today');
+  el.innerHTML='<span style="color:#484f58;font-size:12px;">板块数据通过腾讯API查询中...</span>';
+}
+
+// 关键价位
+async function loadKeyLevels(){
+  const d=await fetchJSON('/api/key-levels');
+  const tb=document.getElementById('kl-tbody');
+  tb.innerHTML='';
+  for(const [name,kl] of Object.entries(d)){
+    const r=await fetchJSON('/api/positions');
+    const pos=r.find(p=>p.name===name);
+    if(!pos) continue;
+    const p=pos.price;
+    const sup=kl.support?kl.support[0]:0;
+    const res=kl.resistance?kl.resistance[0]:0;
+    const supPct=sup?((p-sup)/sup*100).toFixed(1):'--';
+    const resPct=res?((res-p)/p*100).toFixed(1):'--';
+    tb.innerHTML+=`<tr>
+      <td><b>${name}</b></td>
+      <td>¥${sup?fmt(sup,2):'--'}</td>
+      <td>¥${res?fmt(res,2):'--'}</td>
+      <td class="${supPct>0?'up':'down'}">${supPct==='--'?'--':arrow(parseFloat(supPct))+supPct+'%'}</td>
+      <td class="${resPct>0?'down':'up'}">${resPct==='--'?'--':arrow(parseFloat(resPct))+' '+resPct+'%'}</td>
+    </tr>`;
+  }
+}
+
+// 全量刷新
+async function refresh(){
+  await Promise.all([
+    loadIndices(),
+    loadAISentiment(),
+    loadPositions(),
+    loadCandidates(),
+    loadKeyLevels(),
+    loadSectors(),
+    loadSentiment(),
+  ]);
+}
+
+// 轮询
+refresh();
+setInterval(refresh,RS*1000);
+</script>
+</body>
+</html>
