@@ -263,36 +263,29 @@ def api_positions():
 
 @app.route("/api/indices")
 def api_indices():
-    """大盘指数（mootdx TCP + 腾讯API）"""
+    """大盘指数（A-Stock Data 腾讯API标准接口）"""
     try:
+        prefix_map = {"000001": "sh", "000688": "sh", "399001": "sz", "399006": "sz"}
+        prefixed = [f"{prefix_map.get(idx['code'], 'sh')}{idx['code']}" for idx in CONFIG["indices"]]
+        url = "https://qt.gtimg.cn/q=" + ",".join(prefixed)
+        r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        r.encoding = "gbk"
         result = []
-        for idx in CONFIG["indices"]:
-            code = idx["code"]
-            # mootdx拉指数
-            df = _MOOTDX.index(symbol=code) if _MOOTDX_OK else None
-            price = 0
-            change_pct = 0
-            if df is not None and not df.empty:
-                last = df.iloc[-1]
-                price = float(last["close"])
-                pre_close = float(last["pre_close"])
-                change_pct = round((price - pre_close) / pre_close * 100, 2) if pre_close else 0
-            else:
-                # 回退腾讯API
-                prefix = "sh" if code in ("000001", "000688") else "sz"
-                r = requests.get(f"https://qt.gtimg.cn/q={prefix}{code}",
-                                headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
-                r.encoding = "gbk"
-                vals = r.text.split('"')[1].split("~")
-                if len(vals) > 34:
-                    price = float(vals[3]) if vals[3] else 0
-                    change_pct = float(vals[32]) if vals[32] else 0
+        for line in r.text.strip().split(";"):
+            if not line.strip() or "=" not in line or '"' not in line:
+                continue
+            vals = line.split('"')[1].split("~")
+            if len(vals) < 35:
+                continue
+            code = vals[2]
             result.append({
-                "name": idx["name"],
+                "name": vals[1],
                 "code": code,
-                "price": price,
-                "change_pct": change_pct,
+                "price": float(vals[3]) if vals[3] else 0,
+                "change_pct": float(vals[32]) if vals[32] else 0,
             })
+        code_order = [idx["code"] for idx in CONFIG["indices"]]
+        result.sort(key=lambda x: code_order.index(x["code"]) if x["code"] in code_order else 99)
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)})
