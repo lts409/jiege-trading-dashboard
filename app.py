@@ -335,6 +335,103 @@ def api_key_levels():
 def api_sentiment():
     return jsonify({"up": 1800, "label": "🌥️ 平衡", "note": "880005暂用模拟值"})
 
+@app.route("/tts")
+def tts_page():
+    """TTS语音页面 - 手机端访问，输入文字→生成语音"""
+    return """
+<!DOCTYPE html><html lang=zh-CN><head>
+<meta charset=UTF-8>
+<meta name=viewport content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>📣 语音播报</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0d1117;color:#c9d1d9;font-family:-apple-system,PingFang SC,sans-serif;padding:20px;}
+h1{font-size:18px;color:#58a6ff;margin-bottom:16px;}
+.btn{display:block;width:100%;padding:16px;font-size:18px;border:none;border-radius:12px;cursor:pointer;margin-bottom:12px;font-weight:600;}
+.btn-primary{background:#238636;color:#fff;}
+.btn-secondary{background:#21262d;color:#8b949e;border:1px solid #30363d;}
+.btn:active{opacity:0.8;}
+.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin-bottom:12px;}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.stock{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #21262d;font-size:14px;}
+.up{color:#f04452;}.down{color:#238636;}
+.footer{margin-top:20px;text-align:center;color:#484f58;font-size:12px;}
+audio{width:100%;margin:12px 0;}
+</style>
+</head><body>
+<h1>📣 开车语音播报</h1>
+<div id=autoPlay style="display:none"></div>
+
+<button class="btn btn-primary" onclick="playStatus()">🔊 播报当前持仓</button>
+
+<div id=status class=card></div>
+
+<div class=card>
+  <div style="font-size:13px;color:#8b949e;margin-bottom:8px;">自定义播报</div>
+  <textarea id=tx style="width:100%;height:60px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;padding:8px;font-size:14px;" placeholder="输入要播报的内容..."></textarea>
+  <button class="btn btn-secondary" style="margin-top:8px;" onclick="playCustom()">▶ 播放</button>
+</div>
+
+<div class=card>
+  <div style="font-size:13px;color:#8b949e;margin-bottom:8px;">持仓速览</div>
+  <div id=posList></div>
+</div>
+
+<div class=footer>
+  数据来源: A-Stock Data | 语音: macOS Tingting
+</div>
+
+<script>
+const HOST = window.location.origin;
+function play(url) {
+  const a = document.getElementById('autoPlay');
+  a.innerHTML = `<audio src="${url}" autoplay controls style="width:100%"></audio>`;
+  setTimeout(() => { a.querySelector('audio')?.play(); }, 100);
+}
+
+async function playStatus() {
+  try {
+    const r = await fetch(HOST+'/api/positions');
+    const d = await r.json();
+    let text = '当前持仓概况：';
+    let total = 0;
+    const list = document.getElementById('posList');
+    list.innerHTML = d.map(p => {
+      total += p.gain_amt;
+      const g = p.gain_pct > 0 ? '盈利' : p.gain_pct < 0 ? '亏损' : '持平';
+      const c = p.gain_pct > 0 ? 'up' : 'down';
+      text += p.name + '，现价' + p.price + '，' + g + Math.abs(p.gain_pct).toFixed(1) + '%。';
+      return `<div class=stock><span>${p.name}</span><span class=${c}>${g}${Math.abs(p.gain_pct).toFixed(1)}%</span></div>`;
+    }).join('');
+    text += '总浮动盈亏' + (total > 0 ? '盈利' : '亏损') + Math.abs(total).toFixed(0) + '元。';
+    
+    // 加AI情绪
+    try {
+      const s = await fetch(HOST+'/api/ai-sentiment');
+      const sd = await s.json();
+      text += 'AI产业链情绪指数' + sd.ratio + '%，' + sd.advice;
+    } catch(e) {}
+    
+    const url = HOST + '/api/tts?text=' + encodeURIComponent(text);
+    play(url);
+  } catch(e) {
+    alert('获取数据失败: '+e.message);
+  }
+}
+
+async function playCustom() {
+  const text = document.getElementById('tx').value.trim();
+  if(!text) { alert('请输入要播报的内容'); return; }
+  const url = HOST + '/api/tts?text=' + encodeURIComponent(text);
+  play(url);
+}
+
+// 自动播报（页面加载后）
+setTimeout(playStatus, 500);
+</script>
+</body></html>
+"""
+
 @app.route("/api/tts")
 def api_tts():
     """TTS语音合成 - 开车时用手机浏览器访问"""
@@ -360,14 +457,19 @@ def api_tts():
             text = "数据获取失败，请稍后再试"
     
     # 生成语音文件
-    tts_path = f"/tmp/tts/tts_{datetime.now().strftime('%H%M%S')}.aiff"
-    os.makedirs("/tmp/tts", exist_ok=True)
+    ts = datetime.now().strftime('%H%M%S')
+    tts_dir = "/tmp/tts"
+    os.makedirs(tts_dir, exist_ok=True)
+    tts_path = f"{tts_dir}/tts_{ts}.aiff"
     try:
         subprocess.run(["say", "-v", "Tingting", text, "-o", tts_path],
                       check=True, timeout=30, capture_output=True)
         return send_file(tts_path, mimetype="audio/aiff",
                         as_attachment=False,
-                        download_name=f"tts_{datetime.now().strftime('%H%M%S')}.aiff")
+                        download_name=f"tts_{ts}.aiff")
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr.decode() if e.stderr else ""
+        return jsonify({"error": f"TTS失败: {stderr}", "text": text})
     except Exception as e:
         return jsonify({"error": str(e), "text": text})
 
